@@ -7,3 +7,4 @@ transformers
 fastapi
 uvicorn
 gunicorn
+python-multipart
