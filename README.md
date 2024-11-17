@@ -1,14 +1,3 @@
----
-title: Crowd Counter
-emoji: 👥
-colorFrom: blue
-colorTo: red
-sdk: gradio
-sdk_version: 3.50.2
-app_file: app.py
-pinned: false
----
-
 # Crowd Counter Model 👥
 
 This repository provides a YOLOv8-based model to count the number of people in an image. It is designed for applications such as crowd density monitoring and live CCTV analysis.
@@ -19,7 +8,19 @@ This repository provides a YOLOv8-based model to count the number of people in a
 
 ## How to Use
 1. Clone the repository.
-2. Install dependencies:
+2. Set up a venv
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
-
+   ```
+4. Start the server
+    ```bash
+    uvicorn app:app --reload
+    ```
+5. Open a new terminal and run test
+    ```bash
+    curl.exe -X GET http://localhost:8000/
+    ```
+    ```bash
+    curl.exe -X POST -F "file=@image.png" http://localhost:8000/predict/
+    ```
