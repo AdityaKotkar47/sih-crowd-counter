@@ -1,0 +1,1 @@
+web: gunicorn app:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --timeout 120 --keep-alive 5 --log-level debug

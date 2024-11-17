@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: crowd-counter
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+    plan: standard
+    scaling:
+      minInstances: 1
+      maxInstances: 1
+    resources:
+      cpu: 1x
+      memory: 2048MB
+      storage: 512MB
+    healthCheckPath: /
+    envVars:
+      - key: TIMEOUT_SECONDS
+        value: 60

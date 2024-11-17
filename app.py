@@ -5,6 +5,8 @@ from handler import EndpointHandler
 from PIL import Image
 import io
 import logging
+import asyncio
+from functools import partial
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,19 +21,25 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Initialize the handler
-try:
-    handler = EndpointHandler()
-    logger.info("Handler initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize handler: {str(e)}")
-    raise
+# Initialize the handler as a global variable
+handler = None
+
+@app.on_event("startup")
+async def startup_event():
+    global handler
+    try:
+        # Initialize handler in the background
+        handler = EndpointHandler()
+        logger.info("Handler initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize handler: {str(e)}")
+        raise
 
 @app.get("/")
 async def root():
@@ -46,14 +54,16 @@ async def root():
 
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
-    """
-    Endpoint to predict crowd count from an image.
+    """Endpoint to predict crowd count from an image."""
+    global handler
     
-    Args:
-        file: Uploaded image file (must be an image format)
-    Returns:
-        JSON response with crowd count or error message
-    """
+    # Check if handler is initialized
+    if handler is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Server is still initializing. Please try again in a few moments."
+        )
+    
     # Validate file type
     if not file.content_type.startswith('image/'):
         raise HTTPException(
@@ -68,8 +78,9 @@ async def predict(file: UploadFile = File(...)):
         # Prepare input for handler
         data = {"inputs": image_bytes}
         
-        # Get prediction
-        response = handler(data)
+        # Run prediction in a separate thread to avoid blocking
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(None, handler, data)
         
         # Check for errors in handler response
         if "error" in response:
@@ -80,8 +91,12 @@ async def predict(file: UploadFile = File(...)):
             
         return JSONResponse(content=response)
     
-    except HTTPException as he:
-        raise he
+    except asyncio.TimeoutError:
+        logger.error("Request timed out")
+        raise HTTPException(
+            status_code=504,
+            detail="Request timed out"
+        )
     except Exception as e:
         logger.error(f"Prediction error: {str(e)}")
         raise HTTPException(
