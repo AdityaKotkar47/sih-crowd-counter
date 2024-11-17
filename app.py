@@ -1,37 +1,36 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, File, UploadFile
 from handler import EndpointHandler
 from PIL import Image
 import io
 
-# Initialize FastAPI app and model handler
 app = FastAPI()
+
+# Initialize the handler
 handler = EndpointHandler()
+
+@app.get("/")
+async def root():
+    return {"message": "Pravaah Online"}
 
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
     """
-    Predict the crowd count from an uploaded image file.
+    Endpoint to predict crowd count.
     Args:
-        file: UploadFile - the image file to process
+        file: Uploaded image file.
     Returns:
-        JSON response with the count of people in the image
+        JSON response with crowd count.
     """
     try:
-        # Read the uploaded file's bytes
+        # Read the image file
         image_bytes = await file.read()
         
-        # Prepare data for the handler
+        # Prepare input for handler
         data = {"inputs": image_bytes}
-        result = handler(data)
-
-        # If the handler returns an error, raise an exception
-        if "error" in result:
-            raise HTTPException(status_code=400, detail=result["error"])
         
-        return JSONResponse(content=result)
-
+        # Get prediction
+        response = handler(data)
+        return response
+    
     except Exception as e:
-        return JSONResponse(
-            content={"error": str(e)}, status_code=500
-        )
+        return {"error": f"An error occurred: {str(e)}"}

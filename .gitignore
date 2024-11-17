@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Virtual Environments
+crowded/
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Data files
+*.csv
+*.tsv
+*.json
+*.h5
+*.hdf5
+*.pickle
+*.pkl
+
+# Model files
+*.model
+*.pt
+*.pth
+*.onnx
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Images
+*.png
+
+# Specific files
+test.py
