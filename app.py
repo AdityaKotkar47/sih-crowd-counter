@@ -8,6 +8,10 @@ app = FastAPI()
 # Initialize the handler
 handler = EndpointHandler()
 
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
+
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
     """
