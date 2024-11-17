@@ -2,20 +2,27 @@ services:
   - type: web
     name: crowd-counter
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.9.0
+    buildCommand: |
+      pip install --upgrade pip
+      pip install torch --index-url https://download.pytorch.org/whl/cpu
+      pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --timeout 120 --keep-alive 5 --log-level debug --bind 0.0.0.0:$PORT
     plan: standard
     scaling:
       minInstances: 1
       maxInstances: 1
     resources:
-      cpu: 1x
-      memory: 2048MB
-      storage: 512MB
+      cpu: 2x
+      memory: 4096MB
+      storage: 1024MB
     healthCheckPath: /
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
       - key: TIMEOUT_SECONDS
-        value: 60
+        value: 120
+      - key: PYTORCH_ENABLE_MPS_FALLBACK
+        value: 1
+      - key: CUDA_VISIBLE_DEVICES
+        value: ""
+    autoDeploy: false

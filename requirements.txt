@@ -4,8 +4,9 @@ gunicorn==20.1.0
 python-multipart
 Pillow
 ultralytics
-torch
 numpy
 python-jose[cryptography]
 passlib[bcrypt]
 python-dotenv
+requests
+aiohttp
