@@ -7,6 +7,7 @@ import io
 import logging
 import asyncio
 from functools import partial
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -47,18 +48,25 @@ async def root():
     return {
         "status": "online",
         "message": "Pravaah Crowd Detection API",
+        "model_status": "loaded" if handler and handler.initialized else "initializing",
         "endpoints": {
             "/predict/": "POST endpoint for crowd detection (requires image file)"
         }
     }
 
+async def process_image(file_content: bytes):
+    """Process image in a separate thread to avoid blocking."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, handler, {"inputs": file_content})
+
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
     """Endpoint to predict crowd count from an image."""
     global handler
+    start_time = time.time()
     
     # Check if handler is initialized
-    if handler is None:
+    if handler is None or not hasattr(handler, 'initialized'):
         raise HTTPException(
             status_code=503,
             detail="Server is still initializing. Please try again in a few moments."
@@ -72,15 +80,29 @@ async def predict(file: UploadFile = File(...)):
         )
     
     try:
-        # Read the image file
+        # Read the image file with size limit
+        file_size_limit = 10 * 1024 * 1024  # 10MB
         image_bytes = await file.read()
         
-        # Prepare input for handler
-        data = {"inputs": image_bytes}
+        if len(image_bytes) > file_size_limit:
+            raise HTTPException(
+                status_code=413,
+                detail="File too large. Maximum size is 10MB"
+            )
         
-        # Run prediction in a separate thread to avoid blocking
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(None, handler, data)
+        # Set a timeout for the entire processing
+        timeout = 30  # seconds
+        try:
+            response = await asyncio.wait_for(
+                process_image(image_bytes),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            logger.error("Processing timeout")
+            raise HTTPException(
+                status_code=504,
+                detail="Processing timeout"
+            )
         
         # Check for errors in handler response
         if "error" in response:
@@ -88,7 +110,9 @@ async def predict(file: UploadFile = File(...)):
                 status_code=500,
                 detail=response["error"]
             )
-            
+        
+        # Add processing time to response
+        response["total_processing_time"] = f"{time.time() - start_time:.2f}s"
         return JSONResponse(content=response)
     
     except asyncio.TimeoutError:
@@ -107,7 +131,11 @@ async def predict(file: UploadFile = File(...)):
 # Add an error handler for generic exceptions
 @app.exception_handler(Exception)
 async def generic_exception_handler(request, exc):
+    logger.error(f"Unhandled exception: {str(exc)}")
     return JSONResponse(
         status_code=500,
-        content={"error": str(exc)}
+        content={
+            "error": str(exc),
+            "type": type(exc).__name__
+        }
     )

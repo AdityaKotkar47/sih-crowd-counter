@@ -6,6 +6,7 @@ services:
       pip install --upgrade pip
       pip install torch --index-url https://download.pytorch.org/whl/cpu
       pip install -r requirements.txt
+      python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"  # Pre-download model during build
     startCommand: gunicorn app:app --workers 1 --worker-class uvicorn.workers.UvicornWorker --timeout 120 --keep-alive 5 --log-level debug --bind 0.0.0.0:$PORT
     plan: standard
     scaling:
@@ -14,7 +15,7 @@ services:
     resources:
       cpu: 2x
       memory: 4096MB
-      storage: 1024MB
+      storage: 2048MB  # Increased storage for model caching
     healthCheckPath: /
     envVars:
       - key: PYTHON_VERSION
@@ -25,4 +26,8 @@ services:
         value: 1
       - key: CUDA_VISIBLE_DEVICES
         value: ""
+      - key: OMP_NUM_THREADS  # Control CPU threads
+        value: 4
+      - key: MKL_NUM_THREADS  # Control Intel MKL threads
+        value: 4
     autoDeploy: false
