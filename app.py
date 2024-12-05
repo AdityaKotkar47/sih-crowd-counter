@@ -2,12 +2,7 @@ from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from handler import EndpointHandler
-from PIL import Image
-import io
 import logging
-import asyncio
-from functools import partial
-import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,7 +30,6 @@ handler = None
 async def startup_event():
     global handler
     try:
-        # Initialize handler in the background
         handler = EndpointHandler()
         logger.info("Handler initialized successfully")
     except Exception as e:
@@ -48,25 +42,19 @@ async def root():
     return {
         "status": "online",
         "message": "Pravaah Crowd Detection API",
-        "model_status": "loaded" if handler and handler.initialized else "initializing",
+        "model_status": "loaded" if handler and handler._initialized else "initializing",
         "endpoints": {
             "/predict/": "POST endpoint for crowd detection (requires image file)"
         }
     }
 
-async def process_image(file_content: bytes):
-    """Process image in a separate thread to avoid blocking."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, handler, {"inputs": file_content})
-
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
-    """Endpoint to predict crowd count from an image."""
+    """Endpoint to predict crowd count from an image"""
     global handler
-    start_time = time.time()
     
     # Check if handler is initialized
-    if handler is None or not hasattr(handler, 'initialized'):
+    if not handler or not handler._initialized:
         raise HTTPException(
             status_code=503,
             detail="Server is still initializing. Please try again in a few moments."
@@ -80,62 +68,26 @@ async def predict(file: UploadFile = File(...)):
         )
     
     try:
-        # Read the image file with size limit
-        file_size_limit = 10 * 1024 * 1024  # 10MB
-        image_bytes = await file.read()
+        # Read file
+        contents = await file.read()
         
-        if len(image_bytes) > file_size_limit:
-            raise HTTPException(
-                status_code=413,
-                detail="File too large. Maximum size is 10MB"
-            )
+        # Process image
+        result = handler({"inputs": contents})
         
-        # Set a timeout for the entire processing
-        timeout = 30  # seconds
-        try:
-            response = await asyncio.wait_for(
-                process_image(image_bytes),
-                timeout=timeout
-            )
-        except asyncio.TimeoutError:
-            logger.error("Processing timeout")
-            raise HTTPException(
-                status_code=504,
-                detail="Processing timeout"
-            )
-        
-        # Check for errors in handler response
-        if "error" in response:
+        # Check for errors in result
+        if "error" in result:
             raise HTTPException(
                 status_code=500,
-                detail=response["error"]
+                detail=result["error"]
             )
+            
+        return JSONResponse(content=result)
         
-        # Add processing time to response
-        response["total_processing_time"] = f"{time.time() - start_time:.2f}s"
-        return JSONResponse(content=response)
-    
-    except asyncio.TimeoutError:
-        logger.error("Request timed out")
-        raise HTTPException(
-            status_code=504,
-            detail="Request timed out"
-        )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Prediction error: {str(e)}")
+        logger.error(f"Unhandled exception: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"An error occurred during prediction: {str(e)}"
+            detail=str(e)
         )
-
-# Add an error handler for generic exceptions
-@app.exception_handler(Exception)
-async def generic_exception_handler(request, exc):
-    logger.error(f"Unhandled exception: {str(exc)}")
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": str(exc),
-            "type": type(exc).__name__
-        }
-    )
