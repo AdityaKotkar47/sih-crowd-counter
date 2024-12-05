@@ -1,66 +1,60 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from handler import EndpointHandler
+from contextlib import asynccontextmanager
 import logging
+import uvicorn
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(
-    title="Crowd Detection API",
-    description="API for detecting and counting people in images",
-    version="1.0.0"
-)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Initialize the handler as a global variable
+# Initialize handler as None
 handler = None
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for FastAPI app."""
     global handler
     try:
+        # Initialize on startup
         handler = EndpointHandler()
         logger.info("Handler initialized successfully")
+        yield
     except Exception as e:
         logger.error(f"Failed to initialize handler: {str(e)}")
         raise
+    finally:
+        # Cleanup on shutdown
+        if handler and hasattr(handler, 'model'):
+            del handler.model
+            handler = None
+
+# Create FastAPI app without docs
+app = FastAPI(
+    docs_url=None,    # Disable swagger documentation
+    redoc_url=None,   # Disable redoc documentation
+    openapi_url=None, # Disable openapi schema
+    lifespan=lifespan # Add lifespan context manager
+)
 
 @app.get("/")
 async def root():
     """Root endpoint to check API status"""
     return {
         "status": "online",
-        "message": "Pravaah Crowd Detection API",
-        "model_status": "loaded" if handler and handler._initialized else "initializing",
-        "endpoints": {
-            "/predict/": "POST endpoint for crowd detection (requires image file)"
-        }
+        "model_status": "loaded" if handler and handler.initialized else "initializing"
     }
 
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
     """Endpoint to predict crowd count from an image"""
-    global handler
-    
-    # Check if handler is initialized
-    if not handler or not handler._initialized:
+    if not handler or not handler.initialized:
         raise HTTPException(
             status_code=503,
-            detail="Server is still initializing. Please try again in a few moments."
+            detail="Model is initializing. Please try again in a few moments."
         )
     
-    # Validate file type
     if not file.content_type.startswith('image/'):
         raise HTTPException(
             status_code=400,
@@ -68,13 +62,9 @@ async def predict(file: UploadFile = File(...)):
         )
     
     try:
-        # Read file
         contents = await file.read()
-        
-        # Process image
         result = handler({"inputs": contents})
         
-        # Check for errors in result
         if "error" in result:
             raise HTTPException(
                 status_code=500,
@@ -86,8 +76,11 @@ async def predict(file: UploadFile = File(...)):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unhandled exception: {str(e)}")
+        logger.error(f"Prediction error: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=str(e)
         )
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8000)

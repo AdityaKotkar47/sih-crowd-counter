@@ -12,7 +12,6 @@ build/
 .ipynb_checkpoints
 
 # Virtual Environments
-crowded/
 test/
 venv/
 env/
