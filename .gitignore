@@ -42,8 +42,6 @@ ENV/
 *.temp
 *.bak
 
-# Images
-*.png
 
 # Specific files
 test.py

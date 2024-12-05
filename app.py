@@ -49,16 +49,19 @@ async def root():
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
     """Endpoint to predict crowd count from an image"""
-    if not handler or not handler.initialized:
-        raise HTTPException(
-            status_code=503,
-            detail="Model is initializing. Please try again in a few moments."
-        )
+    if file is None or file.content_type is None:
+        raise HTTPException(status_code=400, detail="Invalid file")
     
     if not file.content_type.startswith('image/'):
         raise HTTPException(
             status_code=400,
             detail="File must be an image"
+        )
+    
+    if not handler or not handler.initialized:
+        raise HTTPException(
+            status_code=503,
+            detail="Model is initializing. Please try again in a few moments."
         )
     
     try:
