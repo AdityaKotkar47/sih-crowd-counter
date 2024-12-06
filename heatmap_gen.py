@@ -1,13 +1,18 @@
 import os
 import json
-import requests
+import requests # type: ignore
+from flask import Flask, send_from_directory, abort, send_file, jsonify
+from flask_cors import CORS
 
 # Configuration
 CONFIG_PATH = "config/regions.json"
 IMAGE_DIR = "tests/images"
-MAP_SVG_PATH = "map.svg"
-HEATMAP_OUTPUT_PATH = "heatmap.svg"
+MAP_SVG_PATH = "map.svg"  # Update path to where map.svg is stored
+HEATMAP_OUTPUT_PATH = "assets/heatmap.svg" # Update to a valid path
 API_ENDPOINT = "http://127.0.0.1:8000/predict/"
+
+# Create assets directory if it doesn't exist
+os.makedirs("assets", exist_ok=True)
 
 # Load regions
 try:
@@ -139,5 +144,19 @@ def main():
     # Generate heatmap
     generate_heatmap()
 
+# Initialize Flask app
+app = Flask(__name__)
+CORS(app)
+
+# Serve the heatmap.svg file
+@app.route('/heatmap', methods=['GET'])
+def serve_heatmap():
+    if os.path.exists(HEATMAP_OUTPUT_PATH):
+        return send_file(HEATMAP_OUTPUT_PATH, mimetype='image/svg+xml')
+    else:
+        return jsonify({"detail": "Heatmap SVG file not found"}), 404
+
 if __name__ == "__main__":
     main()
+    # Start the Flask server
+    app.run(host='0.0.0.0', port=5000)
