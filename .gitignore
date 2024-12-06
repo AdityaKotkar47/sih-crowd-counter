@@ -20,9 +20,7 @@ ENV/
 .env/
 
 # Data files
-*.csv
 *.tsv
-*.json
 *.h5
 *.hdf5
 *.pickle
