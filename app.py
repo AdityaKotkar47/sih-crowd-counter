@@ -63,8 +63,6 @@ async def root():
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
     """Endpoint to predict crowd count from an image"""
-    logger.info(f"Received file: {file.filename}, Content-Type: {file.content_type}")
-    
     if file is None or file.content_type is None:
         raise HTTPException(status_code=400, detail="Invalid file")
     
@@ -82,13 +80,13 @@ async def predict(file: UploadFile = File(...)):
     
     try:
         contents = await file.read()
-        result = handler({"inputs": contents})
+        # Preprocess image and get prediction
+        count = handler.preprocess_image(contents)
         
-        if "error" in result:
-            raise HTTPException(
-                status_code=500,
-                detail=result["error"]
-            )
+        result = {
+            "count": count,
+            "status": "success"
+        }
             
         return JSONResponse(content=result)
         
