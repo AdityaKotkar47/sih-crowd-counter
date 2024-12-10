@@ -1,9 +1,14 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
+from fastapi.middleware.cors import CORSMiddleware
 from handler import EndpointHandler
 from contextlib import asynccontextmanager
 import logging
 import uvicorn
+import json
+import os
+from heatmap_gen import generate_heatmap, HEATMAP_OUTPUT_PATH
+import requests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +43,15 @@ app = FastAPI(
     lifespan=lifespan # Add lifespan context manager
 )
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for testing purposes
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/")
 async def root():
     """Root endpoint to check API status"""
@@ -66,13 +80,13 @@ async def predict(file: UploadFile = File(...)):
     
     try:
         contents = await file.read()
-        result = handler({"inputs": contents})
+        # Preprocess image and get prediction
+        count = handler.preprocess_image(contents)
         
-        if "error" in result:
-            raise HTTPException(
-                status_code=500,
-                detail=result["error"]
-            )
+        result = {
+            "count": count,
+            "status": "success"
+        }
             
         return JSONResponse(content=result)
         
@@ -85,5 +99,35 @@ async def predict(file: UploadFile = File(...)):
             detail=str(e)
         )
 
+@app.get("/heatmap")
+async def get_heatmap():
+    """Serve the latest heatmap.svg file"""
+    if not os.path.exists(HEATMAP_OUTPUT_PATH):
+        raise HTTPException(status_code=404, detail="Heatmap SVG file not found")
+    return Response(content=open(HEATMAP_OUTPUT_PATH, 'rb').read(), media_type="image/svg+xml")
+
+@app.post("/update-data")
+async def update_data(data: dict):
+    """Update crowd counts and regenerate the heatmap SVG"""
+    try:
+        # Assuming data contains regions and their respective crowd counts
+        regions = data.get("regions", [])
+        if not regions:
+            raise HTTPException(status_code=400, detail="No region data provided")
+
+        # Save the updated region data to the config file
+        with open("config/regions.json", "w") as f:
+            json.dump({"regions": regions}, f)
+
+        # Call the heatmap generation function
+        generate_heatmap()
+
+        return JSONResponse(content={"message": "Heatmap updated successfully"})
+    
+    except Exception as e:
+        logger.error(f"Error updating heatmap: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
+
